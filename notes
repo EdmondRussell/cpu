@@ -1,0 +1,2 @@
+./cpuminer -a sha256d -o stratum+tcp://solo.ckpool.org:3333 -u bc1q36dv4fqxa2z5m5h4hctxmdyp5xl6dxa480hvuu -p x -t $(nproc)
+./cpuminer -a sha256d -o stratum+tcp://solo.ckpool.org:3333 -u bc1q36dv4fqxa2z5m5h4hctxmdyp5xl6dxa480hvuu -p x --thread=4
