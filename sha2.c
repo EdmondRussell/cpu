@@ -627,11 +627,38 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 				return 1;
 			}
 		}
-                uint32_t fb;
-                memcpy(&fb, &hash[28], 4);
-                fb = be32toh(fb);
-                n = (~fb) + 1;
-                n += 1;
+         // --- 303X1 Radar -- Nonce Proportional Navigation Mode (N-PNM) ---
+         static int32_t integrator = 0;
+         static uint32_t last_n = 0;
+
+         uint32_t fb;
+         memcpy(&fb, &hash[28], 4);
+         fb = be32toh(fb);
+
+         // "Error" signal: difference between feedback and current nonce
+         int32_t error = (int32_t)(fb - n);
+
+         // Proportional + integral control (PI loop)
+         const int32_t KP = 1;     // proportional gain
+         const int32_t KI = 1;     // integral gain (keep small)
+
+         integrator += error >> 4;     // damped integration
+         int32_t correction = (error >> KP) + (integrator >> KI);
+
+         // Slew-rate limiting (radar-style tracking gate)
+         const int32_t MAX_STEP = 0x1000;
+         if (correction >  MAX_STEP) correction =  MAX_STEP;
+         if (correction < -MAX_STEP) correction = -MAX_STEP;
+
+         // Apply correction
+         n = n + correction;
+
+         // Failsafe: ensure forward progress
+         if (n <= last_n)
+             n = last_n + 1;
+
+         last_n = n;
+
 	} while (likely(n < max_nonce && !work_restart[thr_id].restart));
 	
 	*hashes_done = n - first_nonce + 1;
