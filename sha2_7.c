@@ -634,7 +634,6 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 
      uint32_t stride = (fb & 0xFFF) | 1;  // small odd step
      n += stride; 
-     }
 	} while (likely(n < max_nonce && !work_restart[thr_id].restart));
 	
 	*hashes_done = n - first_nonce + 1;
