@@ -598,7 +598,7 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 	const uint32_t first_nonce = pdata[19];
 	const uint32_t Htarg = ptarget[7];
 	uint32_t n = pdata[19] - 1;
-
+	
 #ifdef HAVE_SHA256_8WAY
 	if (sha256_use_8way())
 		return scanhash_sha256d_8way(thr_id, work, max_nonce, hashes_done);
@@ -607,6 +607,14 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 	if (sha256_use_4way())
 		return scanhash_sha256d_4way(thr_id, work, max_nonce, hashes_done);
 #endif
+	
+	// 303X1 - Radar - Prime wheel
+	// Keep odd and skip small factors without division loops
+	static const uint8_t wheel[30] = {
+		1,0,0,0,0,0,0,1,0,0,  // 0,1,7
+		0,1,0,1,0,0,0,1,0,1,  // 11,13,17,19
+		0,0,0,1,0,0,0,0,0,1   // 23,29
+	};
 	
 	memcpy(data, pdata + 16, 64);
 	sha256d_preextend(data);
@@ -628,25 +636,19 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 				return 1;
 			}
 		}
-    // 303X1 - Radar - Prime wheel
-     // Keep odd and skip small factors without division loops
-     static const uint8_t wheel[30] = {
-         0,1,0,0,0,1,0,1,0,0,
-         0,1,0,0,0,1,0,1,0,0,
-         0,1,0,0,0,1,0,1,0,0
-     };
-
-     uint32_t fb;
-     memcpy(&fb, &hash[0], 4);
-     fb = be32toh(fb);
-
-     n ^= fb;
-     n |= 1;
-
-     // Skip numbers divisible by 2,3,5
-     while (!wheel[n % 30]) {
-         n += 2;
-     }
+		
+		// Prime wheel increment
+		uint32_t fb;
+		memcpy(&fb, &hash[0], 4);
+		fb = be32toh(fb);
+		n ^= fb;
+		n |= 1;  // Ensure odd
+		
+		// Skip numbers divisible by 2,3,5 using wheel
+		while (!wheel[n % 30] && n < max_nonce) {
+			n += 2;
+		}
+		
 	} while (likely(n < max_nonce && !work_restart[thr_id].restart));
 	
 	*hashes_done = n - first_nonce + 1;
