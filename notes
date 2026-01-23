@@ -9,3 +9,13 @@ make distclean  # full clean
 ./autogen.sh
 ./configure CFLAGS="-O3 -Wall -march=native -DNO_ASM" --with-curl
 make -j$(nproc)
+
+
+
+macOS:
+make clean
+./autogen.sh
+./nomacro.pl
+./configure --with-curl --with-crypto --with-jansson
+make
+
