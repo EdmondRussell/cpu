@@ -646,7 +646,6 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
      // Skip numbers divisible by 2,3,5
      while (!wheel[n % 30]) {
          n += 2;
-     }    
      }
 	} while (likely(n < max_nonce && !work_restart[thr_id].restart));
 	
