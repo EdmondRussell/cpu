@@ -2,15 +2,44 @@
 ./cpuminer -a sha256d -o stratum+tcp://solo.ckpool.org:3333 -u bc1q36dv4fqxa2z5m5h4hctxmdyp5xl6dxa480hvuu -p x --thread=4
 
 
+sudo apt update
+sudo apt install build-essential dkms linux-headers-$(uname -r) automake autoconf libtool
+sudo apt install zlib1g-dev libbz2-dev libncurses5-dev libncursesw5-dev libssl-dev
+sudo apt install build-essential autoconf automake libtool libcurl4-openssl-dev libjansson-dev libssl-dev libgmp-dev
+
+git clone https://github.com/tpruvot/cpuminer-multi.git
+cd cpuminer-multi
+./autogen.sh
+./nomacro.pl
+./configure CFLAGS="-march=native" --with-crypto=/usr/local/opt/openssl --with-curl
+perl -p -i -e "s/#if \(WINDOWS\)/#define ASM 0\n#if (WINDOWS)/g" algo/neoscrypt.c
+make
+
 export CPPFLAGS="-I/usr/include/openssl"
 export LDFLAGS="-L/usr/lib/x86_64-linux-gnu"
 export OPENSSL_LIBS="-lssl -lcrypto"
+./autogen.sh
+./configure CFLAGS="-O3 -Wall -march=native -DNO_ASM" --with-curl
+make clean
+make -j$(nproc)
+sudo make install  # optional
+
 make distclean  # full clean
 ./autogen.sh
 ./configure CFLAGS="-O3 -Wall -march=native -DNO_ASM" --with-curl
 make -j$(nproc)
 
 
+cd ~  # or new dir
+git clone https://github.com/JayDDee/cpuminer-opt.git
+cd cpuminer-opt
+./autogen.pl  # or ./autogen.sh
+./configure CFLAGS="-O3 -march=native -funroll-loops" --with-curl
+make -j$(nproc)
+
+sudo lsof -i :4048
+sudo systemd-resolve --flush-caches
+sudo systemctl restart NetworkManager
 
 macOS:
 make clean
