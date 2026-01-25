@@ -637,7 +637,7 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
                  hamming_sum += __builtin_popcount(hash[i] ^ last_hash[i]);
              memcpy(last_hash, hash, 32);
          }
-
+		
 	} while (likely(n < max_nonce && !work_restart[thr_id].restart));
 	
 	*hashes_done = n - first_nonce + 1;
