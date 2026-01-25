@@ -657,8 +657,3 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 	pdata[19] = n;
 	return 0;
 }
-	
-	*hashes_done = n - first_nonce + 1;
-	pdata[19] = n;
-	return 0;
-}
