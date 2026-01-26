@@ -639,7 +639,7 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 		// Pell number increment
 		uint32_t fb;
 		memcpy(&fb, &hash[0], 4);
-		fb = be32toh(fb);
+		fb = swab32(fb);
 		n ^= fb;
 		
 		// Use hash to select Pell number from table
