@@ -630,7 +630,7 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
     // 303X1 - Radar - Hash-guided stride
      uint32_t fb;
      memcpy(&fb, &hash[0], 4);
-     fb = be32toh(fb);
+     fb = swab32(fb);
 
      uint32_t stride = (fb & 0xFFF) | 1;  // small odd step
      n += stride; 
