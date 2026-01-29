@@ -586,7 +586,7 @@ static inline int scanhash_sha256d_8way(int thr_id, struct work *work,
 
 #endif /* HAVE_SHA256_8WAY */
 
-int scanhash_sha256d_sobol(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
+int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
 {
 	uint32_t _ALIGN(128) data[64];
 	uint32_t _ALIGN(32) hash[8];
