@@ -111,3 +111,26 @@ make
 sudo apt update -o Acquire::Check-Valid-Until=false -o Acquire::AllowInsecureRepositories=true
 sudo apt install --allow-unauthenticated ca-certificates autoconf automake libtool pkg-config build-essential
 
+
+
+/etc/systemd/system/cpuminer.service
+
+[Unit]
+Description=CPUMiner Solo BCH
+After=network.target
+
+[Service]
+User=miner
+Group=miner
+WorkingDirectory=/home/miner
+ExecStart=/usr/local/bin/cpuminer -a sha256d -o stratum+tcp://eu2.solopool.org:8002 -u qz8yud9mqjdvmgquvha7k6kmpr0ecsrx0sx68807t4.miner1 -p x -t $(nproc) -D
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
+
+
+
+sudo systemctl daemon-reload && sudo systemctl enable cpuminer && sudo systemctl start cpuminer
