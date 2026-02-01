@@ -17,24 +17,41 @@ URL="stratum+tcp://eu2.solopool.org:8002"
 THREADS=$(nproc)
 
 run_miner() {
-    echo "Starting miner..."
-    # We use 'stdbuf' to ensure the output isn't buffered so we can read it instantly
+    echo "Starting miner with $THREADS threads..."
+    # We use 'stdbuf' to prevent output buffering
     stdbuf -oL ./cpuminer -a sha256d -o "$URL" -u "$ADDRESS" -p x -t "$THREADS" 2>&1 | while read -r line; do
-        echo "$line" # Print to terminal so you can still see it
+        echo "$line"
         
-        # Check if line contains hashrate info
-        if [[ "$line" == *"Total:"* ]]; then
-            # Extract the number before "kH/s"
-            current_rate=$(echo "$line" | sed -n 's/.*Total: \([0-9.]*\) kH\/s.*/\1/p' | cut -d. -f1)
+        # Check if line contains "CPU #" and "kH/s"
+        if [[ "$line" == *"CPU #"* ]] && [[ "$line" == *"kH/s"* ]]; then
+            # Extract the number specifically between the colon and 'kH/s'
+            # This handles strings like "[timestamp] CPU #1: 6941 kH/s"
+            current_rate=$(echo "$line" | sed -n 's/.*: \([0-9.]*\) kH\/s.*/\1/p' | cut -d. -f1)
             
-            if [ -n "$current_rate" ] && [ "$current_rate" -lt "$MIN_HASHRATE" ]; then
-                echo "ALARM: Hashrate $current_rate kH/s is below $MIN_HASHRATE! Restarting..."
-                pkill -P $$ cpuminer # Kill the miner process
-                break # Break the while loop to restart
+            # Ensure current_rate is a valid number before comparing
+            if [[ "$current_rate" =~ ^[0-9]+$ ]]; then
+                if [ "$current_rate" -lt "$MIN_HASHRATE" ]; then
+                    echo "--- WATCHDOG: Hashrate $current_rate kH/s dropped below $MIN_HASHRATE! ---"
+                    # Kill the miner process group
+                    pkill -P $$ cpuminer
+                    break
+                fi
             fi
         fi
     done
 }
+
+while true; do
+    run_miner
+    echo "Restarting miner in 5 seconds..."
+    sleep 5
+done
+
+
+
+
+
+
 
 # Keep the miner running forever
 while true; do
