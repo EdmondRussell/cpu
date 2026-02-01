@@ -1,6 +1,9 @@
 ./cpuminer -a sha256d -o stratum+tcp://solo.ckpool.org:3333 -u bc1q36dv4fqxa2z5m5h4hctxmdyp5xl6dxa480hvuu -p x -t $(nproc)
 ./cpuminer -a sha256d -o stratum+tcp://solo.ckpool.org:3333 -u bc1q36dv4fqxa2z5m5h4hctxmdyp5xl6dxa480hvuu -p x --thread=4
-bitcoincash:qz8yud9mqjdvmgquvha7k6kmpr0ecsrx0sx68807t4
+
+./cpuminer -a sha256d -o stratum+tcp://public-pool.io:3333 -u bitcoincash:qz8yud9mqjdvmgquvha7k6kmpr0ecsrx0sx68807t4 -p x -t $(nproc)
+./cpuminer -a sha256d -o stratum+tcp://public-pool.io:3333 -u bitcoincash:qz8yud9mqjdvmgquvha7k6kmpr0ecsrx0sx68807t4 -p x --thread=4
+
 
 sudo apt update
 sudo apt install build-essential dkms linux-headers-$(uname -r) automake autoconf libtool
