@@ -108,3 +108,5 @@ make clean
 ./configure --with-curl --with-crypto --with-jansson
 make
 
+sudo apt update -o Acquire::Check-Valid-Until=false -o Acquire::AllowInsecureRepositories=true
+
