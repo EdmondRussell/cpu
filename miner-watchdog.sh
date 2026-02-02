@@ -3,7 +3,7 @@
 # Configuration
 MIN_HASHRATE=5000
 ADDRESS="bc1qca9673x0335xss274yuz8uaz5nryhkgy0nrpyu"
-URL="stratum+tcp://public-pool.io:3333"
+URL="stratum+tcp://solo.ckpool.org:3333"
 THREADS=$(nproc)
 
 run_miner() {
