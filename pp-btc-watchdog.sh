@@ -2,7 +2,7 @@
 
 # Configuration
 MIN_HASHRATE=500
-ADDRESS="bitcoincash:qqetcjvct0rav8vsux89zf69sr7kw25wnv26prfu8h"
+ADDRESS="bc1qca9673x0335xss274yuz8uaz5nryhkgy0nrpyu"
 URL="stratum+tcp://public-pool.io:3333"
 THREADS=$(nproc)
 
