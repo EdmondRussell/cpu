@@ -1,6 +1,7 @@
 #include "miner.h"
 #include <math.h>
 #include <string.h>
+#include <complex.h>
 #include <inttypes.h>
 
 #if defined(USE_ASM) && defined(__arm__) && defined(__APCS_32__)
