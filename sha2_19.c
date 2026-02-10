@@ -1,6 +1,6 @@
 #include "miner.h"
-#include <math.h>
 #include <complex.h>
+#include <math.h>
 #include <string.h>
 #include <inttypes.h>
 
@@ -607,16 +607,15 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 	sha256d_prehash(prehash, pdata + 16);
 	
 	// --- Riemann Zeta Analytic Navigator ---
-	// Treat nonce space as complex plane C
-	// Approximate ζ(s) via hash-derived Dirichlet series
-	// Navigate via zero-detection and critical line proximity
+	// Avoid complex.h - use separate real/imaginary components
 	
-	static double complex zeta_accumulator = 0.0 + 0.0*I;      // Running ζ(s) approximation
-	static double zero_proximity[16] = {0};                     // Distance to known zeros
-	static uint32_t zero_index = 0;                             // Current zero being tracked
-	static double critical_line_deviation = 0.0;                // Distance from Re(s) = 1/2
-	static uint64_t prime_gap_accumulator = 0;                  // von Mangoldt function Λ(n)
-	static double explicit_formula_sum = 0.0;                   // ψ(x) prime counting
+	static double zeta_real = 0.0;
+	static double zeta_imag = 0.0;
+	static double zero_proximity[16] = {0};
+	static uint32_t zero_index = 0;
+	static double critical_line_deviation = 0.0;
+	static uint64_t prime_gap_accumulator = 0;
+	static double explicit_formula_sum = 0.0;
 	static uint32_t last_n = 0;
 	
 	// Known non-trivial zeros (imaginary parts on critical line)
@@ -643,51 +642,45 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 		}
 		
 		// --- Construct Complex Variable s = σ + it ---
-		// Map hash output to point in complex plane
-		
-		double sigma = ((double)(hash[0] % 10000) / 10000.0);  // Real part: 0 to 1
-		double t = ((double)hash[1] / 65536.0) * 100.0;         // Imaginary part: 0 to 100
-		
-		double complex s = sigma + t * I;
+		double sigma = ((double)(hash[0] % 10000) / 10000.0);
+		double t = ((double)hash[1] / 65536.0) * 100.0;
 		
 		// --- Dirichlet Series Approximation ---
 		// ζ(s) = Σ(n=1 to ∞) 1/n^s
-		// Truncated approximation using hash-derived terms
+		// Computing 1/k^s = 1/k^(σ+it) = k^(-σ) * e^(-it·ln(k))
+		//                 = k^(-σ) * [cos(t·ln(k)) - i·sin(t·ln(k))]
 		
-		double complex zeta_partial = 0.0 + 0.0*I;
+		double zeta_partial_real = 0.0;
+		double zeta_partial_imag = 0.0;
 		
-		// Use hash values to determine series truncation and weights
 		int series_terms = 50 + (hash[2] % 50);
 		
 		for (int k = 1; k <= series_terms; k++) {
-			// Hash-modulated term: includes both standard and twisted contributions
-			uint32_t term_hash = hash[k % 8] ^ (k * 2654435761U);  // Knuth multiplier
+			uint32_t term_hash = hash[k % 8] ^ (k * 2654435761U);
 			double term_weight = 1.0 + ((double)(term_hash % 1000) / 10000.0);
 			
-			// Standard Dirichlet series term: 1/k^s
-			double complex term = term_weight / cpow((double)k, s);
-			zeta_partial += term;
+			// k^(-σ)
+			double k_power = pow((double)k, -sigma);
+			double log_k = log((double)k);
+			double angle = -t * log_k;
+			
+			// Real and imaginary parts
+			zeta_partial_real += term_weight * k_power * cos(angle);
+			zeta_partial_imag += term_weight * k_power * sin(angle);
 		}
 		
-		// Update running accumulator with exponential averaging
-		zeta_accumulator = zeta_accumulator * 0.95 + zeta_partial * 0.05;
+		// Exponential averaging
+		zeta_real = zeta_real * 0.95 + zeta_partial_real * 0.05;
+		zeta_imag = zeta_imag * 0.95 + zeta_partial_imag * 0.05;
+		
+		// Magnitude: |ζ(s)| = √(real² + imag²)
+		double zeta_magnitude = sqrt(zeta_real * zeta_real + zeta_imag * zeta_imag);
 		
 		// --- Critical Line Analysis ---
-		// Riemann Hypothesis: All non-trivial zeros have Re(s) = 1/2
-		
-		// Measure deviation from critical line σ = 1/2
 		critical_line_deviation = fabs(sigma - 0.5);
-		
-		// Bonus: check if we're near the critical strip (0 < σ < 1)
 		bool in_critical_strip = (sigma > 0.0 && sigma < 1.0);
 		
 		// --- Zero Detection & Proximity Analysis ---
-		// |ζ(s)| ≈ 0 indicates proximity to a zero
-		
-		double zeta_magnitude = cabs(zeta_accumulator);
-		
-		// Update proximity to known zeros
-		// Check if current t is near known zero locations
 		double min_zero_distance = 1000.0;
 		int closest_zero_idx = 0;
 		
@@ -704,131 +697,106 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 		zero_index = closest_zero_idx;
 		
 		// --- Functional Equation Analysis ---
-		// ζ(s) = 2^s π^(s-1) sin(πs/2) Γ(1-s) ζ(1-s)
-		// Check symmetry about critical line
+		// s_reflected = (1-σ) + it
+		double sigma_reflected = 1.0 - sigma;
 		
-		double complex s_reflected = (1.0 - sigma) + t * I;
-		
-		// Simplified functional equation check (without full Gamma function)
-		double symmetry_score = fabs(cabs(zeta_accumulator) - 
-		                              cabs(1.0 / cpow(s_reflected, 0.5)));
+		// Magnitude at reflected point (simplified)
+		double reflected_mag = 1.0 / pow(sqrt(sigma_reflected*sigma_reflected + t*t), 0.5);
+		double symmetry_score = fabs(zeta_magnitude - reflected_mag);
 		
 		// --- Explicit Formula for Prime Counting ---
-		// ψ(x) = x - Σ(ρ) x^ρ/ρ - log(2π)
-		// Where ρ are the non-trivial zeros
-		
 		double x = (double)n;
-		explicit_formula_sum = x;  // Start with main term
+		explicit_formula_sum = x;
 		
 		// Subtract contributions from zeros
+		// x^ρ where ρ = 1/2 + i·γ
+		// x^(1/2 + i·γ) = √x · e^(i·γ·ln(x)) = √x · [cos(γ·ln(x)) + i·sin(γ·ln(x))]
 		for (int i = 0; i < NUM_ZEROS && i < 8; i++) {
-			double complex rho = 0.5 + riemann_zeros[i] * I;  // Zeros on critical line
-			double complex x_rho = cpow(x, rho);
+			double gamma = riemann_zeros[i];
+			double sqrt_x = sqrt(x);
+			double log_x = log(x);
 			
-			explicit_formula_sum -= creal(x_rho / rho);
+			// Real part of x^ρ / ρ
+			double rho_mag = sqrt(0.25 + gamma * gamma);  // |ρ| = √(1/4 + γ²)
+			double x_rho_real = sqrt_x * cos(gamma * log_x);
+			
+			explicit_formula_sum -= x_rho_real / rho_mag;
 		}
 		
 		// --- von Mangoldt Function Approximation ---
-		// Λ(n) = log(p) if n = p^k, 0 otherwise
-		// Relates to zeta via: -ζ'/ζ = Σ Λ(n)/n^s
-		
-		// Prime detection via hash properties
 		bool is_pseudo_prime = true;
 		
-		// Miller-Rabin-style hash test
 		for (int i = 0; i < 4; i++) {
 			uint32_t witness = hash[i] ^ hash[i+4];
-			if ((witness % n) == 0 && witness != 0) {
+			if (witness != 0 && (witness % ((n % 65536) + 1)) == 0) {
 				is_pseudo_prime = false;
 				break;
 			}
 		}
 		
-		if (is_pseudo_prime) {
-			// Approximate log(p) for "prime-like" nonce
+		if (is_pseudo_prime && n > 1) {
 			double log_prime = log((double)n + 1.0);
 			prime_gap_accumulator += (uint64_t)(log_prime * 1000.0);
 		}
 		
 		// --- Riemann-Siegel Formula ---
-		// More accurate ζ(1/2 + it) calculation for large t
-		// Z(t) = e^(iθ(t)) ζ(1/2 + it) is real-valued
-		
-		if (in_critical_strip && fabs(sigma - 0.5) < 0.1) {
-			// Riemann-Siegel theta function approximation
+		if (in_critical_strip && fabs(sigma - 0.5) < 0.1 && t > 1.0) {
 			double theta = (t/2.0) * log(t/(2.0*M_PI)) - t/2.0 - M_PI/8.0;
 			
-			// Main sum term
 			int N = (int)sqrt(t / (2.0 * M_PI));
-			double Z_approximation = 0.0;
+			if (N > 20) N = 20;
 			
-			for (int k = 1; k <= N && k <= 20; k++) {
+			double Z_approximation = 0.0;
+			for (int k = 1; k <= N; k++) {
 				Z_approximation += cos(theta - t * log((double)k)) / sqrt((double)k);
 			}
 			
 			Z_approximation *= 2.0;
-			
-			// Use Z(t) magnitude as guidance
 			zeta_magnitude = fabs(Z_approximation);
 		}
 		
 		// --- Prime Number Theorem Navigation ---
-		// π(x) ~ x / log(x)
-		// Use to estimate "prime density" at current nonce
-		
 		double prime_density = 1.0 / log((double)n + 2.0);
 		
 		// --- Nonce Perturbation via Analytic Number Theory ---
 		
 		// Component 1: Zero proximity gradient
-		// Move toward nearest Riemann zero
 		int64_t zero_guidance = 0;
 		if (min_zero_distance > 0.1) {
-			// Not near zero → move toward it
 			double direction = (t < riemann_zeros[zero_index]) ? 1.0 : -1.0;
 			zero_guidance = (int64_t)(direction * min_zero_distance * 200.0);
 		} else {
-			// Very near zero → fine exploration
 			zero_guidance = ((hash[3] % 64) - 32);
 		}
 		
 		// Component 2: Critical line attraction
-		// Riemann Hypothesis: pull toward Re(s) = 1/2
 		int64_t critical_guidance = -(int64_t)(critical_line_deviation * 1024.0);
 		
-		// Component 3: Zeta magnitude (zero detection)
-		// Small |ζ(s)| → near zero → explore carefully
+		// Component 3: Zeta magnitude
 		int64_t magnitude_guidance = 0;
 		if (zeta_magnitude < 0.5) {
-			// Near zero region → small steps
 			magnitude_guidance = ((hash[4] % 128) - 64);
 		} else {
-			// Far from zeros → large jumps acceptable
 			magnitude_guidance = (int64_t)((zeta_magnitude - 1.0) * 512.0);
 		}
 		
 		// Component 4: Functional equation symmetry
-		// High symmetry → on critical line → valuable region
 		int64_t symmetry_guidance = -(int64_t)(symmetry_score * 256.0);
 		
 		// Component 5: Explicit formula correction
-		// ψ(x) deviation from x indicates oscillation from zeros
 		int64_t explicit_guidance = (int64_t)((explicit_formula_sum - x) / 10.0);
 		
 		// Component 6: Prime gap navigation
-		// von Mangoldt function guides toward prime-rich regions
 		int64_t prime_guidance = (int64_t)((prime_gap_accumulator % 2048) - 1024);
 		
-		// Component 7: Argument principle
-		// Integrate ζ'/ζ to count zeros in region
-		double arg_principle = carg(zeta_accumulator);
+		// Component 7: Argument (phase angle)
+		double arg_principle = atan2(zeta_imag, zeta_real);
 		int64_t argument_guidance = (int64_t)(arg_principle * 128.0);
 		
 		// Component 8: Prime Number Theorem offset
-		// High prime density → probable solution cluster
 		int64_t pnt_guidance = (int64_t)((prime_density - 0.1) * 2048.0);
 		
-		// Weighted combination of analytic components
+		// Weighted combination
 		int64_t perturbation = (zero_guidance >> 1) +
 		                        (critical_guidance >> 2) +
 		                        (magnitude_guidance >> 1) +
@@ -838,40 +806,34 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 		                        (argument_guidance >> 4) +
 		                        (pnt_guidance >> 2);
 		
-		// --- Hardy-Littlewood Conjecture Constraint ---
-		// Prime gaps ~ log²(p) distribution
+		// Hardy-Littlewood prime gap constraint
 		if (is_pseudo_prime) {
-			double expected_gap = log((double)n) * log((double)n);
+			double expected_gap = log((double)n + 1.0) * log((double)n + 1.0);
 			perturbation += (int64_t)expected_gap;
 		}
 		
-		// --- Gram Point Navigation ---
-		// Gram points g_n where Z(g_n) alternates sign
-		// Check if near a Gram point
-		double gram_theta = (t/2.0) * log(t/(2.0*M_PI)) - t/2.0;
-		double gram_residue = fmod(gram_theta, M_PI);
-		
-		if (gram_residue < 0.1 || gram_residue > M_PI - 0.1) {
-			// Near Gram point → potential zero nearby
-			perturbation = perturbation >> 1;  // Reduce step size
+		// Gram point navigation
+		if (t > 1.0) {
+			double gram_theta = (t/2.0) * log(t/(2.0*M_PI)) - t/2.0;
+			double gram_residue = fmod(gram_theta, M_PI);
+			
+			if (gram_residue < 0.1 || gram_residue > M_PI - 0.1) {
+				perturbation = perturbation >> 1;
+			}
 		}
 		
-		// --- Lindelöf Hypothesis Constraint ---
-		// |ζ(1/2 + it)| = O(t^ε) for any ε > 0
-		// Bound perturbation based on growth rate
-		double lindelof_bound = pow(t + 1.0, 0.25);  // ε = 1/4 conservative bound
-		
+		// Lindelöf hypothesis constraint
+		double lindelof_bound = pow(t + 1.0, 0.25);
 		if (zeta_magnitude > lindelof_bound) {
-			// Anomalously large → likely numerical artifact
 			perturbation = perturbation >> 2;
 		}
 		
-		// Slew rate limiting (prevent escaping analytic domain)
+		// Slew rate limiting
 		const int32_t MAX_ZETA_JUMP = 0x1800;
 		if (perturbation > MAX_ZETA_JUMP) perturbation = MAX_ZETA_JUMP;
 		if (perturbation < -MAX_ZETA_JUMP) perturbation = -MAX_ZETA_JUMP;
 		
-		// Apply analytic number theory-guided mutation
+		// Apply mutation
 		n = (uint32_t)((int64_t)n + perturbation);
 		
 		// Ensure forward progress
@@ -880,25 +842,20 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 		
 		last_n = n;
 		
-		// Periodic renormalization (prevent numerical instability)
+		// Periodic renormalization
 		if ((n & 0xFFFF) == 0) {
-			// Reset zeta accumulator to prevent overflow
-			if (cabs(zeta_accumulator) > 100.0) {
-				zeta_accumulator = zeta_accumulator / cabs(zeta_accumulator);
+			double zeta_mag = sqrt(zeta_real * zeta_real + zeta_imag * zeta_imag);
+			if (zeta_mag > 100.0) {
+				zeta_real = zeta_real / zeta_mag;
+				zeta_imag = zeta_imag / zeta_mag;
 			}
 			
-			// Decay proximity measures
 			for (int i = 0; i < NUM_ZEROS; i++) {
 				zero_proximity[i] *= 0.9;
 			}
 			
-			// Reset prime gap accumulator
 			prime_gap_accumulator = prime_gap_accumulator >> 4;
-			
-			// Normalize explicit formula sum
 			explicit_formula_sum = fmin(1e6, fmax(-1e6, explicit_formula_sum));
-			
-			// Reset critical line deviation
 			critical_line_deviation = fmin(1.0, critical_line_deviation);
 		}
 		
