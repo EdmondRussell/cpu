@@ -1,5 +1,4 @@
 #include "miner.h"
-#include <complex.h>
 #include <math.h>
 #include <string.h>
 #include <inttypes.h>
