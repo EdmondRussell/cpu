@@ -4,7 +4,7 @@ sudo apt install zlib1g-dev libbz2-dev libncurses5-dev libncursesw5-dev libssl-d
 sudo apt install build-essential autoconf automake libtool libcurl4-openssl-dev libjansson-dev libssl-dev libgmp-dev
 git clone https://github.com/tpruvot/cpuminer-multi.git
 cd cpuminer-multi
-cp /home/mint/cpu/sha2_26.c /home/mint/cpuminer-multi/algo/sha2.c
+cp /home/mint/cpu/sha2_27.c /home/mint/cpuminer-multi/algo/sha2.c
 cp /home/mint/cpu/pp-btc-watchdog.sh /home/mint/cpuminer-multi/pp-btc-watchdog.sh
 chmod 755 pp-btc-watchdog.sh
 export CPPFLAGS="-I/usr/include/openssl"
