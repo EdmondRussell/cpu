@@ -19,7 +19,7 @@ blocks_solved=0
 # GitHub upload function (requires GITHUB_TOKEN env var + jq)
 upload_to_github() {
     local log_file="$1"
-    local repo="EdmondRussell/workers"
+    local repo="EdmondRussell/cpu"
     local branch="main"
     local path="logs/$(basename "$log_file")"
     local commit_msg="Auto-upload from ${WORKER_NAME}: $(date)"
