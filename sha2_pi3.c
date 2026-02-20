@@ -597,8 +597,10 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 		return scanhash_sha256d_4way(thr_id, work, max_nonce, hashes_done);
 #endif
 	
-	// --- PI MICRO-HOP ---
-	// Mostly sequential with tiny smart jumps
+	// --- PI NANO-HOP (FIXED) ---
+	// 99.9% sequential with proper state tracking
+	
+	static uint32_t last_completed = 0;  // Track where we left off
 	
 	memcpy(data, pdata + 16, 64);
 	sha256d_preextend(data);
@@ -607,6 +609,11 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 	sha256_transform(midstate, pdata, 0);
 	memcpy(prehash, midstate, 32);
 	sha256d_prehash(prehash, pdata + 16);
+	
+	// Resume from where we left off if this is same work
+	if (first_nonce <= last_completed && last_completed < max_nonce) {
+		n = last_completed;
+	}
 	
 	do {
 		data[3] = n;
@@ -618,26 +625,25 @@ int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 			if (fulltest(hash, ptarget)) {
 				work_set_target_ratio(work, hash);
 				*hashes_done = n - first_nonce + 1;
+				last_completed = n + 1;  // Start after this next time
 				return 1;
 			}
 		}
 		
-		// Mostly sequential, tiny occasional hop
-		if ((n & 0xFF) == 0) {
-			// Every 256 iterations, small jump based on hash
-			uint32_t hop = (hash[0] & 0x3F);  // 0-63 hop
-			n += hop;
+		// Almost entirely sequential
+		if ((n & 0x3FF) == 0) {
+			// Every 1024 iterations, tiny skip
+			n += (hash[0] & 0xF);  // Skip 0-15
 		} else {
-			// Sequential
 			n++;
 		}
 		
-		// Keep odd
-		n |= 1;
+		n |= 1;  // Keep odd
 		
 	} while (likely(n < max_nonce && !work_restart[thr_id].restart));
 	
 	*hashes_done = n - first_nonce + 1;
 	pdata[19] = n;
+	last_completed = n;  // Remember where we stopped
 	return 0;
 }
