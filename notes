@@ -1,3 +1,5 @@
+awk -F'best=' 'NF > 1 && $2+0 > max { max = $2+0; line = $0 } END { print line }' miner_stats.log
+
 ./cpuminer -a sha256d -o stratum+tcp://solo.ckpool.org:3333 -u bc1qca9673x0335xss274yuz8uaz5nryhkgy0nrpyu -p x -t $(nproc)
 bc1q36dv4fqxa2z5m5h4hctxmdyp5xl6dxa480hvuu
 ./cpuminer -a sha256d -o stratum+tcp://solo.ckpool.org:3333 -u bc1qca9673x0335xss274yuz8uaz5nryhkgy0nrpyu -p x --thread=4
