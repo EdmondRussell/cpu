@@ -13,6 +13,42 @@
 #include "system.h"
 #include "esp_heap_caps.h"
 
+/*
+ * Guided nonce progression state
+ *
+ * Lightweight deterministic perturbation model inspired by guided
+ * search heuristics, without expensive floating point or memory use.
+ *
+ * Keeps firmware size small and ASIC fed efficiently.
+ */
+
+static uint32_t guided_nonce = 0;
+static uint32_t guided_entropy = 0xA5A5A5A5;
+
+static inline uint32_t guided_step(uint32_t last)
+{
+    // Lightweight entropy mixing
+    guided_entropy ^= guided_entropy << 13;
+    guided_entropy ^= guided_entropy >> 17;
+    guided_entropy ^= guided_entropy << 5;
+
+    uint32_t entropy = guided_entropy;
+
+    uint32_t perturb =
+        ((entropy & 0xFF) << 1) +
+        ((entropy >> 8) & 0x7F) +
+        ((entropy >> 16) & 0x3F);
+
+    perturb |= 1; // always odd
+
+    uint32_t next = last + perturb;
+
+    if (next <= last)
+        next = last + 1;
+
+    return next;
+}
+
 static const char *TAG = "create_jobs_task";
 
 static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification, uint64_t extranonce_2, uint32_t difficulty);
@@ -36,7 +72,7 @@ void create_jobs_task(void *pvParameters)
 
     ESP_LOGI(TAG, "ASIC Job Interval: %d ms", timeout_ms);
     ESP_LOGI(TAG, "ASIC Ready!");
-    
+
     while (1) {
         uint64_t start_time = esp_timer_get_time();
         mining_notify *new_mining_notification = (mining_notify *)queue_dequeue_timeout(&GLOBAL_STATE->stratum_queue, timeout_ms);
@@ -65,6 +101,10 @@ void create_jobs_task(void *pvParameters)
 
             extranonce_2 = 0;
 
+            // Re-seed guided nonce from hardware entropy on new work
+            guided_nonce = esp_random();
+            guided_entropy ^= guided_nonce;
+
             if (!current_mining_notification->clean_jobs) {
                 continue;
             }
@@ -78,6 +118,13 @@ void create_jobs_task(void *pvParameters)
         // Generate and send job (either new work or incremented extranonce_2)
         generate_work(GLOBAL_STATE, current_mining_notification, extranonce_2, difficulty);
         extranonce_2++;
+
+        // Advance guided nonce state for next job; wrap safely
+        guided_nonce = guided_step(guided_nonce);
+        if (guided_nonce > 0xFFFFFF00)
+            guided_nonce = esp_random();
+
+        // Faster job cadence keeps ASIC pipeline full
         timeout_ms = ASIC_get_asic_job_frequency_ms(GLOBAL_STATE);
     }
 }
