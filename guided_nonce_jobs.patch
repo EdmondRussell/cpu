@@ -1,0 +1,87 @@
+diff --git a/main/create_jobs_task.c b/main/create_jobs_task.c
+index 8c3a21f..f47ac10 100644
+--- a/main/create_jobs_task.c
++++ b/main/create_jobs_task.c
+@@ -42,6 +42,49 @@
+ static const char *TAG = "create_jobs";
+
+ 
++/*
++ * Guided nonce progression state
++ *
++ * Lightweight deterministic perturbation model inspired by guided
++ * search heuristics, without expensive floating point or memory use.
++ *
++ * Keeps firmware size small and ASIC fed efficiently.
++ */
++
++static uint32_t guided_nonce = 0;
++static uint32_t guided_entropy = 0xA5A5A5A5;
++
++static inline uint32_t guided_step(uint32_t last)
++{
++    // Lightweight entropy mixing
++    guided_entropy ^= guided_entropy << 13;
++    guided_entropy ^= guided_entropy >> 17;
++    guided_entropy ^= guided_entropy << 5;
++
++    uint32_t entropy = guided_entropy;
++
++    uint32_t perturb =
++        ((entropy & 0xFF) << 1) +
++        ((entropy >> 8) & 0x7F) +
++        ((entropy >> 16) & 0x3F);
++
++    perturb |= 1; // always odd
++
++    uint32_t next = last + perturb;
++
++    if (next <= last)
++        next = last + 1;
++
++    return next;
++}
++
++
++
+ void create_jobs_task(void *pvParameters)
+ {
+     GlobalState *GLOBAL_STATE = get_global_state();
+@@ -97,12 +140,25 @@ void create_jobs_task(void *pvParameters)
+             continue;
+         }
+
+-        uint32_t nonce_start = esp_random();
+-        uint32_t nonce_end = nonce_start + CONFIG_DEFAULT_NONCE_RANGE;
++        // Generate guided sequential nonce ranges
++
++        uint32_t nonce_start = guided_nonce;
++
++        uint32_t job_size =
++            256 +
++            (guided_entropy & 0xFF);
++
++        uint32_t nonce_end = nonce_start + job_size;
++
++        guided_nonce = guided_step(nonce_end);
++
++        // Wrap safely
++        if (guided_nonce > 0xFFFFFF00)
++            guided_nonce = esp_random();
+
+         BM1366Job job = {0};
+
+-        job.start_nonce = nonce_start;
++        job.start_nonce = nonce_start;
+         job.end_nonce = nonce_end;
+
+         bm1366_send_job(&job);
+@@ -110,7 +166,9 @@ void create_jobs_task(void *pvParameters)
+         GLOBAL_STATE->stats.jobs_sent++;
+
+-        vTaskDelay(10 / portTICK_PERIOD_MS);
++        // Faster job cadence keeps ASIC pipeline full
++
++        vTaskDelay(1 / portTICK_PERIOD_MS);
+     }
+ }
