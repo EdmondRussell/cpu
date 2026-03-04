@@ -10,7 +10,7 @@
 #include "stratum_task.h"
 #include "hashrate_monitor_task.h"
 #include "asic.h"
-
+#include "create_jobs_task.h"
 static const char *TAG = "asic_result";
 
 void ASIC_result_task(void *pvParameters)
